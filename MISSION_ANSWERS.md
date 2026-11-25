@@ -240,9 +240,174 @@ flowchart TD
 
 ---
 
+## Part 4: API Security
+
+### Exercise 4.1: API Key Authentication (Develop)
+
+Chạy ứng dụng `04-api-gateway/develop/app.py` với cấu hình biến môi trường `AGENT_API_KEY=secret-key-123`:
+
+1. **Trường hợp không truyền API Key (Kỳ vọng: 401 Unauthorized):**
+   ```bash
+   curl -i -X POST "http://localhost:8000/ask" -H "Content-Type: application/json" -d '{"question":"hello"}'
+   ```
+   *Output thực tế:*
+   ```http
+   HTTP/1.1 401 Unauthorized
+   date: Wed, 25 Nov 2026 07:59:47 GMT
+   server: uvicorn
+   content-length: 67
+   content-type: application/json
+
+   {"detail":"Missing API key. Include header: X-API-Key: <your-key>"}
+   ```
+
+2. **Trường hợp truyền sai API Key (Kỳ vọng: 403 Forbidden):**
+   ```bash
+   curl -i -X POST "http://localhost:8000/ask" -H "X-API-Key: wrong-key" -H "Content-Type: application/json" -d '{"question":"hello"}'
+   ```
+   *Output thực tế:*
+   ```http
+   HTTP/1.1 403 Forbidden
+   date: Wed, 25 Nov 2026 07:59:47 GMT
+   server: uvicorn
+   content-length: 29
+   content-type: application/json
+
+   {"detail":"Invalid API key."}
+   ```
+
+3. **Trường hợp truyền đúng API Key (Kỳ vọng: 200 OK):**
+   ```bash
+   curl -i -X POST "http://localhost:8000/ask" -H "X-API-Key: secret-key-123" -H "Content-Type: application/json" -d '{"question":"hello"}'
+   ```
+   *Output thực tế:*
+   ```http
+   HTTP/1.1 200 OK
+   date: Wed, 25 Nov 2026 07:59:47 GMT
+   server: uvicorn
+   content-length: 145
+   content-type: application/json
+
+   {"question":"hello","answer":"Đây là câu trả lời từ AI agent (mock). Trong production, đây sẽ là response từ OpenAI/Anthropic."}
+   ```
+
+---
+
+### Exercise 4.2 & 4.3: JWT Authentication & Rate Limiting (Production)
+
+Chạy ứng dụng `04-api-gateway/production/app.py` với Full Security Stack.
+
+1. **Lấy JWT Token:**
+   Đăng nhập với tài khoản `student` / `demo123` (tài khoản role user, giới hạn 10 requests/phút):
+   ```bash
+   curl -X POST "http://localhost:8000/auth/token" \
+        -H "Content-Type: application/json" \
+        -d '{"username": "student", "password": "demo123"}'
+   ```
+   *Output:*
+   ```json
+   {
+     "access_token": "eyJhbGciOiJIUzI1NiIs...",
+     "token_type": "bearer",
+     "expires_in_minutes": 60,
+     "hint": "Include in header: Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+   }
+   ```
+
+2. **Gọi endpoint bảo vệ `/ask` khi không có Token (401 Unauthorized):**
+   ```bash
+   curl -i -X POST "http://localhost:8000/ask" -H "Content-Type: application/json" -d '{"question": "what is docker?"}'
+   ```
+   *Output thực tế:*
+   ```http
+   HTTP/1.1 401 Unauthorized
+   date: Wed, 25 Nov 2026 08:00:12 GMT
+   server: uvicorn
+   www-authenticate: Bearer
+   content-length: 76
+   content-type: application/json
+   x-content-type-options: nosniff
+   x-frame-options: DENY
+   x-xss-protection: 1; mode=block
+   referrer-policy: strict-origin-when-cross-origin
+
+   {"detail":"Authentication required. Include: Authorization: Bearer <token>"}
+   ```
+
+3. **Gọi với Token hợp lệ (200 OK) (Token đã được che):**
+   ```bash
+   curl -i -X POST "http://localhost:8000/ask" \
+        -H "Authorization: Bearer <TOKEN_CHE_GIA_TRI_THAT>" \
+        -H "Content-Type: application/json" \
+        -d '{"question": "what is docker?"}'
+   ```
+   *Output thực tế:*
+   ```http
+   HTTP/1.1 200 OK
+   date: Wed, 25 Nov 2026 08:00:12 GMT
+   server: uvicorn
+   content-length: 196
+   content-type: application/json
+   x-content-type-options: nosniff
+   x-frame-options: DENY
+   x-xss-protection: 1; mode=block
+   referrer-policy: strict-origin-when-cross-origin
+
+   {"question":"what is docker?","answer":"Container là cách đóng gói app để chạy ở mọi nơi. Build once, run anywhere!","usage":{"requests_remaining":9,"budget_remaining_usd":1.9e-05}}
+   ```
+
+4. **Kích hoạt Rate Limiting bằng vòng lặp 15 requests (Kỳ vọng: từ request thứ 11 trả về 429 Too Many Requests):**
+   - Vòng lặp gửi liên tục 15 request với token của user `student` (quota 10 req/phút):
+     - Request #1 đến #10: Trả về `HTTP/1.1 200 OK`.
+     - Request #11 đến #15: Trả về `HTTP/1.1 429 Too Many Requests`.
+   - **Output `curl -i` của request thứ 11 (429 Too Many Requests):**
+     ```http
+     HTTP/1.1 429 Too Many Requests
+     date: Wed, 25 Nov 2026 08:00:57 GMT
+     server: uvicorn
+     x-ratelimit-limit: 10
+     x-ratelimit-remaining: 0
+     x-ratelimit-reset: 1795593718
+     retry-after: 59
+     content-length: 98
+     content-type: application/json
+     x-content-type-options: nosniff
+     x-frame-options: DENY
+     x-xss-protection: 1; mode=block
+     referrer-policy: strict-origin-when-cross-origin
+
+     {"detail":{"error":"Rate limit exceeded","limit":10,"window_seconds":60,"retry_after_seconds":59}}
+     ```
+
+---
+
+### Exercise 4.4: Cost Guard Implementation & So sánh Rate Limiting
+
+- **Kiến trúc và cơ chế hoạt động của Cost Guard (`cost_guard.py`):**
+  - **Mục tiêu:** Kiểm soát và bảo vệ ngân sách chi phí gọi LLM API, tránh rủi ro phát sinh hóa đơn khổng lồ do các truy vấn phức tạp hoặc bị lạm dụng.
+  - **Theo dõi số lượng token & tính chi phí:** Sau mỗi request hoàn thành, hệ thống ghi nhận số lượng `input_tokens` và `output_tokens` vào `UsageRecord`. Chi phí tính theo đơn giá mô hình (ví dụ GPT-4o-mini: \$0.15/1M input tokens, \$0.60/1M output tokens).
+  - **Hạn mức 2 tầng (Two-tier Quota):**
+    1. *Hạn mức cá nhân (`daily_budget_usd = $1.0`):* Ngăn một người dùng tiêu xài quá giới hạn cho phép trong ngày. Nếu vượt quá, trả về mã lỗi `HTTP 402 Payment Required`.
+    2. *Hạn mức toàn hệ thống (`global_daily_budget_usd = $10.0`):* Bảo vệ tổng ngân sách hệ thống khỏi việc nhiều người dùng cùng lúc đẩy chi phí lên cao. Nếu vượt quá, trả về `HTTP 503 Service Unavailable`.
+  - **Cơ chế cảnh báo sớm (Early Warning):** Khi người dùng chạm ngưỡng 80% ngân sách (`warn_at_pct = 0.8`), hệ thống ghi log cảnh báo (`WARNING`) để quản trị viên hoặc người dùng kịp thời nhận biết.
+  - **Khả năng Production:** Trong code mẫu lưu memory, khi triển khai production hệ thống sẽ lưu vào Redis (hash `cost:{user_id}:{date}`) kèm TTL tự động reset vào đầu ngày UTC, đảm bảo tính stateless và đồng bộ trên nhiều instance.
+
+- **So sánh: Rate Limiting vs Cost Guard — Tại sao cần cả hai?**
+  - **Rate Limiting:** Bảo vệ **tốc độ truy cập** (Request Velocity) và **sức tải hạ tầng** (CPU, RAM, Network I/O, Database connection pools). Ngăn chặn tấn công DoS/DDoS hoặc bot spam hàng nghìn request trong vài giây. Tuy nhiên, Rate Limiting không quan tâm kích thước payload (1 request hỏi 100,000 tokens văn bản tốn hàng chục USD vẫn chỉ tính là 1 request).
+  - **Cost Guard:** Bảo vệ **tài chính và ngân sách LLM** (Financial Budget). Dù kẻ tấn công gửi request rất chậm (ví dụ 1 request mỗi 2 phút, hoàn toàn lọt qua Rate Limiter), nhưng mỗi request gửi nội dung khổng lồ thì Cost Guard sẽ lập tức phát hiện chi phí tích lũy vượt quá $1.0/ngày và khóa truy vấn ngay lập tức.
+  - **Kết luận:** Hệ thống bắt buộc phải có cả hai tầng bảo vệ: Rate Limiting giữ cho hạ tầng máy chủ luôn ổn định, còn Cost Guard giữ cho tài chính dự án an toàn.
+
+---
+
+### Tự kiểm tra (Self-Check CP3)
+- Đã chạy vòng lặp curl 15 lần và trực tiếp nhận được mã `HTTP 429 Too Many Requests` ở request thứ 11 với đầy đủ headers `x-ratelimit-limit: 10`, `x-ratelimit-remaining: 0`, `retry-after: 59`.
+- Đã che hoàn toàn giá trị token trong tài liệu báo cáo theo đúng yêu cầu bảo mật.
+
+---
+
 ## AI Log
 
-- **Mục đích sử dụng:** Hỗ trợ giải thích cơ chế Docker multi-stage build, layer caching, phân tích cấu trúc Docker Compose và chuẩn hóa sơ đồ Mermaid kiến trúc.
-- **Lời nhắc / Câu hỏi:** Phân tích `02-docker/develop/Dockerfile` và `02-docker/production/Dockerfile`, câu lệnh build từ root, cách đo dung lượng container và kiểm tra kết nối qua Nginx.
-- **Kết quả nhận được:** Câu trả lời cho 4 câu hỏi Exercise 2.1, giải thích multi-stage, sơ đồ kiến trúc Mermaid cho Compose stack.
-- **Tự kiểm tra & hiệu chỉnh:** Đã tự thực thi build cả 2 Docker image từ root repository, đo kích thước thực tế qua `docker images`, tạo `.env.local`, khởi chạy Docker Compose stack và thực hiện curl test qua Nginx cổng 80 đạt HTTP 200 OK cho cả `/health` và `/ask`.
+- **Mục đích sử dụng:** Hỗ trợ phân tích cơ chế bảo mật xác thực (API Key vs JWT), thuật toán Sliding Window Counter trong Rate Limiting và giải pháp Cost Guard cho LLM Agent.
+- **Lời nhắc / Câu hỏi:** Hướng dẫn chạy thử nghiệm API Key (develop), trích xuất token JWT cho tài khoản student, viết lệnh vòng lặp curl tạo lỗi 429 và phân tích nguyên lý hoạt động của Cost Guard.
+- **Kết quả nhận được:** Script kiểm thử curl chuẩn, phân tích chi tiết headers HTTP của lỗi 401/403/200/429, phân biệt vai trò giữa Rate Limiting và Cost Guard.
+- **Tự kiểm tra & hiệu chỉnh:** Đã tự cài `pyjwt`, chạy thử nghiệm thực tế trên local cổng 8000 cho cả bản develop và production, chụp và dán toàn bộ output HTTP headers thực tế (che token), xác minh request thứ 11 bị chặn với HTTP 429.
