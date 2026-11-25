@@ -240,6 +240,55 @@ flowchart TD
 
 ---
 
+## Part 3: Cloud Deployment
+
+### Exercise 3.1: Railway deployment (agent Part 6)
+
+Deploy trực tiếp thư mục `06-lab-complete/` bằng Railway CLI + Dockerfile multi-stage.
+
+- **Public URL:** https://agent-production-34801c79.up.railway.app
+- **Project:** `ai-agent-day14` · **Services:** `agent` (Dockerfile) + `redis` (image `redis:7-alpine`, private domain `redis.railway.internal:6379`)
+- **Biến môi trường đặt trên nền tảng (không ghi trong code):** `AGENT_API_KEY`, `REDIS_URL`, `RATE_LIMIT_PER_MINUTE=10`, `DAILY_BUDGET_USD=10.0`, `ENVIRONMENT=production`. Railway tự inject `PORT`.
+- **Screenshot:** `screenshots/dashboard.png`, `screenshots/running.png`, `screenshots/test.png`
+
+Kết quả 4 lệnh tự kiểm ở CP6 (mỗi lệnh chỉ in mã HTTP):
+
+```text
+GET  /health                          -> 200   {"status":"ok","app":"production-agent","env":"production"}
+GET  /ready                           -> 200   {"status":"ready","redis":true}
+POST /ask (không có X-API-Key)        -> 401
+POST /ask (có X-API-Key đúng)         -> 200
+```
+
+`deploy_check.py` xác nhận **8/8 checks passed** (health, readiness, auth 401/401/200, rate limit 429 sau 10 request, cost guard, logging).
+
+> Lưu ý khi deploy: Railway đã từng build nhầm service Redis từ Dockerfile của agent (cả hai service cùng một thư mục). Khắc phục bằng cách tách `06-lab-complete/redis-service/Dockerfile` (`FROM redis:7-alpine`) và deploy riêng thư mục đó vào service `redis` (`railway up ./redis-service --path-as-root --service redis`). Sau đó `/ready` trả 200 với `"redis":true`.
+
+### So sánh `railway.toml` và `render.yaml`
+
+| Khác biệt | `railway.toml` (Railway) | `render.yaml` (Render) |
+|---|---|---|
+| Phạm vi khai báo | Chỉ cấu hình build + deploy của **một** service (`[build]`, `[deploy]`) | Blueprint IaC khai báo **toàn bộ** hạ tầng: web service + Redis trong cùng một file |
+| Cách build | `builder = "DOCKERFILE"` → dùng Dockerfile multi-stage sẵn có | `runtime: docker` + `dockerfilePath`/root directory (hoặc `runtime: python` + `buildCommand`) |
+| Health check | `healthcheckPath = "/health"` | `healthCheckPath: /health` |
+| Secret / biến môi trường | Set thủ công bằng `railway variables set ...` hoặc Dashboard; không nằm trong file | Khai báo trong `envVars`: `generateValue: true` (Render tự sinh), `sync: false` (điền tay trên Dashboard) |
+| Redis | Service riêng, thêm bằng CLI/Dashboard (image `redis:7-alpine`) | Khai báo declarative `- type: redis` ngay trong blueprint |
+| Tính tái lập | Thấp hơn: phần env/Redis phải thao tác lệnh | Cao: một file mô tả đủ, tạo lại môi trường bằng “New Blueprint” |
+
+**Vì sao chọn Railway làm nền tảng chính:** CLI `railway up` deploy nhanh từ đúng thư mục `06-lab-complete/`, log/build stream ngay trong terminal và hợp với Dockerfile multi-stage đã viết. `render.yaml` được giữ làm phương án IaC dự phòng vì mô tả đầy đủ service + Redis + secret trong một file, dễ tái lập.
+
+### Exercise 3.3: Pipeline Cloud Run (chỉ đọc file, không deploy)
+
+`cloudbuild.yaml` định nghĩa CI/CD chạy khi push lên `main`: (1) step `test` cài dependencies và chạy `pytest`; (2) step `build` build Docker image tag `$COMMIT_SHA` + `latest`, dùng `--cache-from` để tận dụng layer cache; (3) step `push` đẩy image lên Google Container Registry; (4) step `deploy` gọi `gcloud run deploy` với image theo `$COMMIT_SHA`, region `asia-southeast1`, `--min-instances=1/--max-instances=10` và secret lấy từ Secret Manager qua `--set-secrets` (không hardcode). `service.yaml` là Knative Service IaC: autoscaling 1–10, `containerConcurrency: 80`, `timeoutSeconds: 60`, `livenessProbe` trỏ `/health`, `startupProbe` trỏ `/ready`, biến `AGENT_API_KEY`/`OPENAI_API_KEY` đọc từ `secretKeyRef`.
+
+### Tự kiểm tra (Self-Check CP6)
+
+- URL public chạy đúng 4 lệnh: `/health` 200, `/ready` 200, `/ask` thiếu key 401, `/ask` có key 200.
+- `AGENT_API_KEY` và `REDIS_URL` đặt bằng biến môi trường trên Railway, không có trong code hay Git.
+- `railway.toml` dùng `builder = "DOCKERFILE"` và `healthcheckPath = "/health"`; `render.yaml` khai báo web service + Redis + secret không ghi giá trị thật.
+
+---
+
 ## Part 4: API Security
 
 ### Exercise 4.1: API Key Authentication (Develop)
