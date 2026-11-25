@@ -405,9 +405,273 @@ Chạy ứng dụng `04-api-gateway/production/app.py` với Full Security Stack
 
 ---
 
+## Part 5: Scaling & Reliability
+
+### Exercise 5.1 & 5.2: Liveness vs Readiness & Graceful Shutdown (Develop)
+
+Chạy ứng dụng `05-scaling-reliability/develop/app.py` trên cổng 8000:
+
+1. **Kết quả kiểm thử Health Check Endpoints:**
+   - **Liveness Probe (`GET /health`):**
+     ```bash
+     curl -i http://localhost:8000/health
+     ```
+     *Output:*
+     ```http
+     HTTP/1.1 200 OK
+     date: Wed, 25 Nov 2026 08:05:05 GMT
+     server: uvicorn
+     content-length: 195
+     content-type: application/json
+
+     {"status":"ok","uptime_seconds":1.2,"version":"1.0.0","environment":"development","timestamp":"2026-11-25T08:05:06.858802+00:00","checks":{"memory":{"status":"ok","note":"psutil not installed"}}}
+     ```
+   - **Readiness Probe (`GET /ready`):**
+     ```bash
+     curl -i http://localhost:8000/ready
+     ```
+     *Output:*
+     ```http
+     HTTP/1.1 200 OK
+     date: Wed, 25 Nov 2026 08:05:05 GMT
+     server: uvicorn
+     content-length: 37
+     content-type: application/json
+
+     {"ready":true,"in_flight_requests":1}
+     ```
+   - **Gọi `/ask`:**
+     ```bash
+     curl -i -X POST "http://localhost:8000/ask?question=Hello"
+     ```
+     *Output:*
+     ```http
+     HTTP/1.1 200 OK
+     date: Wed, 25 Nov 2026 08:05:05 GMT
+     server: uvicorn
+     content-length: 95
+     content-type: application/json
+
+     {"answer":"Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đi nhé."}
+     ```
+
+2. **Phân biệt Liveness Probe vs Readiness Probe:**
+   - **Liveness (`/health`):** Trả lời câu hỏi *"Agent process có còn sống và phản hồi không?"*. Container orchestrator (Docker, Kubernetes) gọi định kỳ. Nếu endpoint này fail (timeout hoặc mã lỗi khác 200), orchestrator kết luận app đã bị deadlock/freeze và sẽ lập tức **restart container**.
+   - **Readiness (`/ready`):** Trả lời câu hỏi *"Agent đã sẵn sàng nhận thêm traffic mới chưa?"*. Load Balancer kiểm tra endpoint này trước khi route request vào. Trả về 503 khi app đang tải model vào RAM lúc khởi động, hoặc khi hệ thống đang trong tiến trình shutdown. Khi fail, Load Balancer **tạm ngừng gửi traffic mới** tới instance đó nhưng **không restart container**.
+
+3. **Cơ chế Graceful Shutdown:**
+   - Bắt tín hiệu `SIGTERM` từ hệ điều hành / orchestrator.
+   - Ngay lập tức đặt cờ `_is_ready = False`. Khi đó endpoint `/ready` trả về `503 Service Unavailable`, báo hiệu cho Load Balancer lập tức loại instance khỏi danh sách nhận traffic mới.
+   - Middleware `track_requests` theo dõi bộ đếm `_in_flight_requests`. Vòng lặp shutdown đợi cho đến khi toàn bộ các request đang xử lý hoàn tất (`_in_flight_requests == 0`) hoặc chạm timeout tối đa (30 giây).
+   - Đóng các kết nối cơ sở dữ liệu và giải phóng tài nguyên trước khi tiến trình kết thúc, đảm bảo không có request nào của người dùng bị ngắt ngang gây lỗi `502 Bad Gateway`.
+
+---
+
+### Exercise 5.3 – 5.5: Stateless Architecture & Horizontal Scaling với Redis + Nginx (Production)
+
+1. **Tại sao lưu State trong RAM (In-Memory) bị hỏng khi Scale nhiều Instance?**
+   - Khi triển khai nhiều instance phía sau một bộ cân bằng tải (Load Balancer - Nginx), các request liên tiếp của cùng một user sẽ được điều phối tới các instance khác nhau theo thuật toán Round-Robin hoặc Least Connections.
+   - Nếu instance lưu conversation history trong bộ nhớ RAM cục bộ (ví dụ Python dictionary):
+     - Request 1 đến `Instance A`: User nói *"Tên tôi là Duy"*. `Instance A` ghi nhớ vào RAM.
+     - Request 2 đến `Instance B`: User hỏi *"Tên tôi là gì?"*. Do `Instance B` có vùng nhớ RAM tách biệt hoàn toàn với `Instance A`, nó không có dữ liệu ngữ cảnh này và trả lời không biết $\rightarrow$ Sai lệch trải nghiệm người dùng nghiêm trọng.
+     - Ngoài ra, nếu bất kỳ instance nào bị crash hoặc restart khi deploy/auto-scale, toàn bộ session lưu trên instance đó sẽ bị mất sạch.
+
+2. **Giải pháp Stateless Design với Redis:**
+   - Thiết kế instance hoàn toàn không lưu trạng thái (Stateless).
+   - Dữ liệu session và conversation history được lưu trữ tập trung tại Redis cluster thông qua key pattern `session:{session_id}` kèm thời gian sống (TTL).
+   - Bất kỳ instance nào nhận request từ Nginx đều có thể truy xuất và cập nhật cùng một phiên làm việc trên Redis một cách đồng bộ và nhất quán.
+
+3. **Kiểm thử thực tế với 3 Agent Replicas (`test_stateless.py`):**
+   - Đã tạo `.env.local` và khởi chạy stack bằng lệnh:
+     ```bash
+     docker compose -p k5-day14-scaling up -d --build --scale agent=3
+     ```
+   - Nginx mở cổng host **8080**, route traffic vào 3 container agent (`agent-1`, `agent-2`, `agent-3`).
+   - Chạy script kiểm thử:
+     ```bash
+     python test_stateless.py
+     ```
+   - **Output thực tế ghi nhận từ terminal:**
+     ```text
+     ============================================================
+     Stateless Scaling Demo
+     ============================================================
+
+     Session ID: 89ad3a04-0170-471b-9abb-8606034d3bfe
+
+     Request 1: [instance-8d2248]
+       Q: What is Docker?
+       A: Container là cách đóng gói app để chạy ở mọi nơi. Build once, run anywhere!...
+
+     Request 2: [instance-83a1c2]
+       Q: Why do we need containers?
+       A: Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đi nhé....
+
+     Request 3: [instance-1c85ad]
+       Q: What is Kubernetes?
+       A: Đây là câu trả lời từ AI agent (mock). Trong production, đây sẽ là response từ O...
+
+     Request 4: [instance-8d2248]
+       Q: How does load balancing work?
+       A: Tôi là AI agent được deploy lên cloud. Câu hỏi của bạn đã được nhận....
+
+     Request 5: [instance-83a1c2]
+       Q: What is Redis used for?
+       A: Tôi là AI agent được deploy lên cloud. Câu hỏi của bạn đã được nhận....
+
+     ------------------------------------------------------------
+     Total requests: 5
+     Instances used: {'instance-8d2248', 'instance-83a1c2', 'instance-1c85ad'}
+     ✅ All requests served despite different instances!
+
+     --- Conversation History ---
+     Total messages: 10
+       [user]: What is Docker?...
+       [assistant]: Container là cách đóng gói app để chạy ở mọi nơi. Build once...
+       [user]: Why do we need containers?...
+       [assistant]: Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đ...
+       [user]: What is Kubernetes?...
+       [assistant]: Đây là câu trả lời từ AI agent (mock). Trong production, đây...
+       [user]: How does load balancing work?...
+       [assistant]: Tôi là AI agent được deploy lên cloud. Câu hỏi của bạn đã đư...
+       [user]: What is Redis used for?...
+       [assistant]: Tôi là AI agent được deploy lên cloud. Câu hỏi của bạn đã đư...
+
+     ✅ Session history preserved across all instances via Redis!
+     ```
+
+4. **Giải thích kết quả:**
+   - 5 requests trong cùng một phiên hội thoại đã được Nginx phân phối đều tới **cả 3 instances khác nhau** (`instance-8d2248`, `instance-83a1c2`, `instance-1c85ad`).
+   - Mặc dù mỗi câu hỏi được xử lý bởi một container riêng biệt, toàn bộ 10 tin nhắn (5 câu hỏi và 5 câu trả lời) vẫn được tổng hợp và bảo toàn trọn vẹn trong Redis.
+   - Sau khi kiểm thử thành công, đã chạy `docker compose -p k5-day14-scaling down` để dọn dẹp tài nguyên và trả lại cổng mạng.
+
+---
+
+### Tự kiểm tra (Self-Check CP4)
+- **Hiểu sâu sắc Liveness vs Readiness:** Đã chỉ rõ sự khác biệt trong hành vi xử lý của orchestrator (Restart vs De-route traffic).
+- **Khả năng Stateless:** Đã chứng minh qua output thực tế của `test_stateless.py`, xác nhận toàn bộ 3 instance tham gia xử lý nhưng không mất bất kỳ mẩu dữ liệu lịch sử hội thoại nào nhờ Redis.
+
+---
+
+## Part 6: Final Project (Production-ready AI Agent)
+
+### Kết quả chạy `check_production_ready.py` (`PASS 12/12`)
+
+Đã hoàn thiện toàn bộ mã nguồn trong thư mục `06-lab-complete/` và chạy script chấm `check_production_ready.py`.
+
+```text
+================================================================
+  Production Readiness Check — Day 14 Lab
+================================================================
+
+✅ 1. Dockerfile (multi-stage, < 500 MB)
+     ✅ Dockerfile tồn tại
+     ✅ requirements.txt tồn tại
+     ✅ Multi-stage build (≥ 2 lệnh FROM)
+     ✅ Base image gọn (slim / alpine / distroless) — stage cuối dùng python:3.11-slim
+     ✅ Chạy bằng user non-root
+     ✅ Có HEALTHCHECK
+     ✅ Docker: build image thành công — 10s
+     ✅ Docker: image < 500 MB — 238 MB
+     ✅ Docker: container chạy được, GET /health → 200
+
+✅ 2. docker-compose.yml (agent + redis)
+     ✅ docker-compose.yml tồn tại
+     ✅ Có service agent (build từ Dockerfile) + redis — services: agent, redis — đọc bằng docker compose config
+     ✅ Service agent kết nối redis (REDIS_URL + depends_on)
+
+✅ 3. .dockerignore
+     ✅ .dockerignore tồn tại và có nội dung
+     ✅ .dockerignore loại trừ .env (secrets)
+     ✅ .dockerignore loại trừ __pycache__, venv
+
+✅ 4. Health check endpoint (GET /health)
+     ✅ Code có route /health
+     ✅ Khi chạy: GET /health → 200 — uvicorn --workers 2
+
+✅ 5. Readiness endpoint (GET /ready)
+     ✅ Code có route /ready
+     ✅ Khi chạy: GET /ready → 200
+     ✅ Khi chạy: Redis mất kết nối → /ready 503 (còn /health vẫn 200)
+
+✅ 6. API Key authentication
+     ✅ Code đọc header X-API-Key
+     ✅ Khi chạy: thiếu / sai API key → 401
+     ✅ Khi chạy: API key đúng → 200
+
+✅ 7. Rate limiting
+     ✅ Code trả HTTP 429 khi vượt giới hạn
+     ✅ Khi chạy: vượt giới hạn → 429 — 429 sau 5 request thành công (RATE_LIMIT_PER_MINUTE=5)
+     ✅ Khi chạy: state nằm trong Redis — restart agent vẫn bị 429
+
+✅ 8. Cost guard
+     ✅ Code trả HTTP 402 khi hết budget
+     ✅ Khi chạy: hết budget → 402 — 402 ở request thứ 2
+
+✅ 9. Config từ environment variables
+     ✅ app/config.py đọc biến môi trường
+     ✅ .env.example liệt kê đủ biến cấu hình
+     ✅ .env nằm trong .gitignore
+     ✅ Không hard-code secret trong code
+     ✅ Khi chạy: agent dùng AGENT_API_KEY và RATE_LIMIT_PER_MINUTE từ env
+
+✅ 10. Structured logging
+     ✅ Code ghi log dạng JSON
+     ✅ Khi chạy: mọi dòng log của app là JSON hợp lệ — 7 dòng JSON
+
+✅ 11. Graceful shutdown
+     ✅ Code xử lý SIGTERM / lifespan shutdown
+     ✅ Khi chạy: SIGTERM lúc đang có request → request vẫn 200, process tự thoát — exit code 0
+     ✅ Docker: `docker stop` tắt êm (exit code 0, < 10s) — exit code 0, 0.4s
+
+✅ 12. Public URL ready (Railway / Render config)
+     ✅ Có railway.toml hoặc render.yaml (không chỉ toàn comment)
+     ✅ railway.toml: builder + healthcheckPath = "/health"
+     ✅ render.yaml: web service + healthCheckPath /health
+     ✅ render.yaml: secret không ghi thẳng giá trị (generateValue / sync: false)
+     ✅ App lắng nghe theo biến PORT do platform cấp
+
+================================================================
+  📋 Checklist Deliverable
+     ✅ Dockerfile (multi-stage, < 500 MB)
+     ✅ docker-compose.yml (agent + redis)
+     ✅ .dockerignore
+     ✅ Health check endpoint (GET /health)
+     ✅ Readiness endpoint (GET /ready)
+     ✅ API Key authentication
+     ✅ Rate limiting
+     ✅ Cost guard
+     ✅ Config từ environment variables
+     ✅ Structured logging
+     ✅ Graceful shutdown
+     ✅ Public URL ready (Railway / Render config)
+----------------------------------------------------------------
+  Result: 12/12 tiêu chí đạt · 43/43 checks passed
+  🎉 PASS 12/12 — PRODUCTION READY! Deploy nào!
+================================================================
+```
+
+---
+
+### Giải thích chuyên sâu: Vì sao `/health` trả 200 khi Redis chết còn `/ready` phải trả 503?
+
+Đây là một trong những nguyên lý thiết kế hệ thống phân tán quan trọng nhất trong môi trường Production (Kubernetes, Docker Swarm, PaaS):
+
+1. **Bản chất của Liveness Probe (`GET /health`):**
+   - **Mục đích:** Trả lời cho orchestrator câu hỏi: *"Tiến trình (process) của container này có còn hoạt động bình thường hay đã bị treo (deadlock / OOM / freeze)?"*.
+   - **Hành vi của Orchestrator:** Nếu `/health` trả về lỗi (khác 200) hoặc timeout $\rightarrow$ Orchestrator ngay lập tức **tiêu diệt (kill) và restart container**.
+   - **Khi Redis gặp sự cố / mất kết nối:** Bản thân process của Agent vẫn đang chạy hoàn toàn bình thường, mã nguồn không bị lỗi hay treo. Nếu `/health` kiểm tra Redis và trả về 500/503, orchestrator sẽ liên tục restart container của agent theo vòng lặp vô tận (*CrashLoopBackOff*). Việc restart container agent liên tục không thể giải quyết được sự cố của cụm Redis, mà còn gây tốn tài nguyên CPU/RAM, làm quá tải Docker daemon và khiến toàn bộ cụm dịch vụ tê liệt. Do đó, `/health` **phải luôn trả 200** chừng nào process agent còn sống.
+
+2. **Bản chất của Readiness Probe (`GET /ready`):**
+   - **Mục đích:** Trả lời cho Load Balancer câu hỏi: *"Agent này hiện tại có đủ điều kiện để tiếp nhận và xử lý request mới từ người dùng hay không?"*.
+   - **Hành vi của Load Balancer:** Nếu `/ready` trả về 503 $\rightarrow$ Load Balancer lập tức **gỡ instance này ra khỏi danh sách định tuyến (de-route)**, không chuyển traffic của người dùng tới đây nữa; **tuyệt đối không restart container**.
+   - **Khi Redis gặp sự cố:** Agent phụ thuộc vào Redis để kiểm tra Rate Limiting, Cost Guard, và truy xuất Session/Conversation History. Khi không có Redis, Agent không thể bảo vệ hệ thống và không thể xử lý logic nhất quán. Vì vậy, `/ready` **bắt buộc phải trả về 503 Service Unavailable**. Load Balancer sẽ tạm thời giữ hoặc route request sang instance khác. Ngay khi Redis phục hồi kết nối, `/ready` sẽ tự động trả lại HTTP 200 mà không cần restart bất kỳ container nào, hệ thống lập tức tiếp tục phục vụ người dùng trơn tru.
+
+---
+
 ## AI Log
 
-- **Mục đích sử dụng:** Hỗ trợ phân tích cơ chế bảo mật xác thực (API Key vs JWT), thuật toán Sliding Window Counter trong Rate Limiting và giải pháp Cost Guard cho LLM Agent.
-- **Lời nhắc / Câu hỏi:** Hướng dẫn chạy thử nghiệm API Key (develop), trích xuất token JWT cho tài khoản student, viết lệnh vòng lặp curl tạo lỗi 429 và phân tích nguyên lý hoạt động của Cost Guard.
-- **Kết quả nhận được:** Script kiểm thử curl chuẩn, phân tích chi tiết headers HTTP của lỗi 401/403/200/429, phân biệt vai trò giữa Rate Limiting và Cost Guard.
-- **Tự kiểm tra & hiệu chỉnh:** Đã tự cài `pyjwt`, chạy thử nghiệm thực tế trên local cổng 8000 cho cả bản develop và production, chụp và dán toàn bộ output HTTP headers thực tế (che token), xác minh request thứ 11 bị chặn với HTTP 429.
+- **Mục đích sử dụng:** Hỗ trợ phân tích cơ chế bảo mật xác thực (API Key vs JWT), thuật toán Sliding Window Counter trong Rate Limiting, kiến trúc Stateless, thiết kế Full Security Stack cho Final Project (`06-lab-complete/`), và thiết lập môi trường test POSIX trong container để kiểm tra tín hiệu SIGTERM cho Graceful shutdown.
+- **Lời nhắc / Câu hỏi:** Hoàn thiện các file TODO trong `06-lab-complete/` (`config.py`, `redis_client.py`, `auth.py`, `rate_limiter.py`, `cost_guard.py`, `main.py`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.env.example`, `railway.toml`, `render.yaml`), khắc phục lỗi thiếu module `redis`, giải pháp chạy script chấm trong container POSIX để vượt qua kiểm tra SIGTERM.
+- **Kết quả nhận được:** Mã nguồn hoàn chỉnh cho 12 tiêu chí, phân tích bản chất Liveness vs Readiness, script Docker build runner posix và kết quả chấm đạt tuyệt đối `PASS 12/12` (43/43 checks passed).
+- **Tự kiểm tra & hiệu chỉnh:** Đã tự kiểm tra bằng `check_production_ready.py --static-only` (đạt 28/28 checks), cài đặt `redis` và `psutil`, xây dựng container `checker-runner` với đầy đủ Docker CLI và Docker Compose plugin kết nối `--net=host`, chạy script chấm toàn diện và ghi nhận kết quả `PASS 12/12 — PRODUCTION READY!`.
