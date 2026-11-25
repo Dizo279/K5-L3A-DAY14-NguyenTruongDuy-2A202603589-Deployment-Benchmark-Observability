@@ -1,0 +1,52 @@
+{"ts": "2026-11-25T09:33:18.105118+00:00", "event": "startup", "agent_version": "v2", "model": "mock-llm-small", "port": 8002}
+INFO:     Started server process [21784]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8002 (Press CTRL+C to quit)
+{"ts": "2026-11-25T09:33:57.490991+00:00", "event": "http_request", "request_id": "5523dc0e298b", "method": "GET", "route": "/health", "status": 200, "ms": 1.7}
+{"ts": "2026-11-25T09:34:17.233643+00:00", "event": "llm_call", "request_id": "dd4dabc87f20", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 30, "output_tokens": 19, "cost_usd": 1.6e-05, "llm_ms": 182.8, "retrieved": false}
+{"ts": "2026-11-25T09:34:17.234435+00:00", "event": "http_request", "request_id": "dd4dabc87f20", "method": "POST", "route": "/ask", "status": 200, "ms": 201.3}
+{"ts": "2026-11-25T09:34:17.452372+00:00", "event": "llm_call", "request_id": "db6b452f1bdd", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 78, "output_tokens": 40, "cost_usd": 3.6e-05, "llm_ms": 193.9, "retrieved": true}
+{"ts": "2026-11-25T09:34:17.453386+00:00", "event": "http_request", "request_id": "db6b452f1bdd", "method": "POST", "route": "/ask", "status": 200, "ms": 216.2}
+{"ts": "2026-11-25T09:34:17.671229+00:00", "event": "llm_call", "request_id": "4dfa62c4a200", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 83, "output_tokens": 44, "cost_usd": 3.9e-05, "llm_ms": 194.1, "retrieved": true}
+{"ts": "2026-11-25T09:34:17.674120+00:00", "event": "http_request", "request_id": "4dfa62c4a200", "method": "POST", "route": "/ask", "status": 200, "ms": 219.0}
+{"ts": "2026-11-25T09:34:17.843368+00:00", "event": "llm_call", "request_id": "bf6800eac5bd", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 57, "output_tokens": 24, "cost_usd": 2.3e-05, "llm_ms": 133.5, "retrieved": true}
+{"ts": "2026-11-25T09:34:17.845387+00:00", "event": "http_request", "request_id": "bf6800eac5bd", "method": "POST", "route": "/ask", "status": 200, "ms": 170.8}
+{"ts": "2026-11-25T09:34:18.063954+00:00", "event": "llm_call", "request_id": "33d4fef1fb1f", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 74, "output_tokens": 37, "cost_usd": 3.3e-05, "llm_ms": 182.5, "retrieved": true}
+{"ts": "2026-11-25T09:34:18.066959+00:00", "event": "http_request", "request_id": "33d4fef1fb1f", "method": "POST", "route": "/ask", "status": 200, "ms": 219.7}
+{"ts": "2026-11-25T09:34:18.267371+00:00", "event": "llm_call", "request_id": "4499e2e58a04", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 76, "output_tokens": 39, "cost_usd": 3.5e-05, "llm_ms": 191.4, "retrieved": true}
+{"ts": "2026-11-25T09:34:18.269354+00:00", "event": "http_request", "request_id": "4499e2e58a04", "method": "POST", "route": "/ask", "status": 200, "ms": 201.5}
+{"ts": "2026-11-25T09:34:18.501402+00:00", "event": "llm_call", "request_id": "fe43715a3eb1", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 81, "output_tokens": 43, "cost_usd": 3.8e-05, "llm_ms": 193.8, "retrieved": true}
+{"ts": "2026-11-25T09:34:18.504621+00:00", "event": "http_request", "request_id": "fe43715a3eb1", "method": "POST", "route": "/ask", "status": 200, "ms": 233.2}
+{"ts": "2026-11-25T09:34:18.720254+00:00", "event": "llm_call", "request_id": "c2a938b81fe2", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 80, "output_tokens": 41, "cost_usd": 3.7e-05, "llm_ms": 183.3, "retrieved": true}
+{"ts": "2026-11-25T09:34:18.721284+00:00", "event": "http_request", "request_id": "c2a938b81fe2", "method": "POST", "route": "/ask", "status": 200, "ms": 215.3}
+{"ts": "2026-11-25T09:34:18.891616+00:00", "event": "llm_call", "request_id": "f650a3fd5bfc", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 89, "output_tokens": 54, "cost_usd": 4.6e-05, "llm_ms": 156.0, "retrieved": true}
+{"ts": "2026-11-25T09:34:18.892184+00:00", "event": "http_request", "request_id": "f650a3fd5bfc", "method": "POST", "route": "/ask", "status": 200, "ms": 170.2}
+{"ts": "2026-11-25T09:34:19.109957+00:00", "event": "llm_call", "request_id": "4294ee8f6a4b", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 72, "output_tokens": 36, "cost_usd": 3.2e-05, "llm_ms": 180.5, "retrieved": true}
+{"ts": "2026-11-25T09:34:19.111423+00:00", "event": "http_request", "request_id": "4294ee8f6a4b", "method": "POST", "route": "/ask", "status": 200, "ms": 218.2}
+{"ts": "2026-11-25T09:34:19.325337+00:00", "event": "llm_call", "request_id": "5f6c5b17e31a", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 67, "output_tokens": 28, "cost_usd": 2.7e-05, "llm_ms": 173.7, "retrieved": true}
+{"ts": "2026-11-25T09:34:19.327456+00:00", "event": "http_request", "request_id": "5f6c5b17e31a", "method": "POST", "route": "/ask", "status": 200, "ms": 214.9}
+{"ts": "2026-11-25T09:34:19.558576+00:00", "event": "llm_call", "request_id": "bf7d9bbf9b74", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 75, "output_tokens": 37, "cost_usd": 3.3e-05, "llm_ms": 188.4, "retrieved": true}
+{"ts": "2026-11-25T09:34:19.559670+00:00", "event": "http_request", "request_id": "bf7d9bbf9b74", "method": "POST", "route": "/ask", "status": 200, "ms": 230.3}
+{"ts": "2026-11-25T09:34:19.747202+00:00", "event": "llm_call", "request_id": "ff6a99e1d1ac", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 73, "output_tokens": 35, "cost_usd": 3.2e-05, "llm_ms": 153.0, "retrieved": true}
+{"ts": "2026-11-25T09:34:19.749534+00:00", "event": "http_request", "request_id": "ff6a99e1d1ac", "method": "POST", "route": "/ask", "status": 200, "ms": 187.3}
+{"ts": "2026-11-25T09:34:19.982452+00:00", "event": "llm_call", "request_id": "19fa917d40f8", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 78, "output_tokens": 40, "cost_usd": 3.6e-05, "llm_ms": 177.1, "retrieved": true}
+{"ts": "2026-11-25T09:34:19.985475+00:00", "event": "http_request", "request_id": "19fa917d40f8", "method": "POST", "route": "/ask", "status": 200, "ms": 234.5}
+{"ts": "2026-11-25T09:34:20.202187+00:00", "event": "llm_call", "request_id": "d7b6a7ead0bb", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 95, "output_tokens": 55, "cost_usd": 4.7e-05, "llm_ms": 174.0, "retrieved": true}
+{"ts": "2026-11-25T09:34:20.206708+00:00", "event": "http_request", "request_id": "d7b6a7ead0bb", "method": "POST", "route": "/ask", "status": 200, "ms": 219.9}
+{"ts": "2026-11-25T09:34:20.402826+00:00", "event": "llm_call", "request_id": "0b92fab7aef1", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 97, "output_tokens": 55, "cost_usd": 4.8e-05, "llm_ms": 142.0, "retrieved": true}
+{"ts": "2026-11-25T09:34:20.405555+00:00", "event": "http_request", "request_id": "0b92fab7aef1", "method": "POST", "route": "/ask", "status": 200, "ms": 197.7}
+{"ts": "2026-11-25T09:34:20.621364+00:00", "event": "llm_call", "request_id": "710a6e3ab7c7", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 83, "output_tokens": 40, "cost_usd": 3.6e-05, "llm_ms": 191.1, "retrieved": true}
+{"ts": "2026-11-25T09:34:20.623729+00:00", "event": "http_request", "request_id": "710a6e3ab7c7", "method": "POST", "route": "/ask", "status": 200, "ms": 217.0}
+{"ts": "2026-11-25T09:34:20.776873+00:00", "event": "llm_call", "request_id": "ba2222183f3e", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 81, "output_tokens": 46, "cost_usd": 4e-05, "llm_ms": 142.2, "retrieved": true}
+{"ts": "2026-11-25T09:34:20.778986+00:00", "event": "http_request", "request_id": "ba2222183f3e", "method": "POST", "route": "/ask", "status": 200, "ms": 154.6}
+{"ts": "2026-11-25T09:34:20.963603+00:00", "event": "llm_call", "request_id": "9fe535c520c7", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 86, "output_tokens": 46, "cost_usd": 4e-05, "llm_ms": 149.9, "retrieved": true}
+{"ts": "2026-11-25T09:34:20.966609+00:00", "event": "http_request", "request_id": "9fe535c520c7", "method": "POST", "route": "/ask", "status": 200, "ms": 185.9}
+{"ts": "2026-11-25T09:34:21.151053+00:00", "event": "llm_call", "request_id": "4faee8934a3d", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 73, "output_tokens": 35, "cost_usd": 3.2e-05, "llm_ms": 144.4, "retrieved": true}
+{"ts": "2026-11-25T09:34:21.154284+00:00", "event": "http_request", "request_id": "4faee8934a3d", "method": "POST", "route": "/ask", "status": 200, "ms": 185.9}
+{"ts": "2026-11-25T09:34:21.338180+00:00", "event": "llm_call", "request_id": "f0a996476ce5", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 76, "output_tokens": 39, "cost_usd": 3.5e-05, "llm_ms": 164.6, "retrieved": true}
+{"ts": "2026-11-25T09:34:21.338774+00:00", "event": "http_request", "request_id": "f0a996476ce5", "method": "POST", "route": "/ask", "status": 200, "ms": 183.6}
+{"ts": "2026-11-25T09:34:21.538384+00:00", "event": "llm_call", "request_id": "0deaff6e86bd", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 74, "output_tokens": 37, "cost_usd": 3.3e-05, "llm_ms": 161.5, "retrieved": true}
+{"ts": "2026-11-25T09:34:21.538984+00:00", "event": "http_request", "request_id": "0deaff6e86bd", "method": "POST", "route": "/ask", "status": 200, "ms": 198.5}
+{"ts": "2026-11-25T09:34:21.740837+00:00", "event": "llm_call", "request_id": "6d2b67881cba", "model": "mock-llm-small", "agent_version": "v2", "input_tokens": 69, "output_tokens": 33, "cost_usd": 3e-05, "llm_ms": 193.7, "retrieved": true}
+{"ts": "2026-11-25T09:34:21.743089+00:00", "event": "http_request", "request_id": "6d2b67881cba", "method": "POST", "route": "/ask", "status": 200, "ms": 202.1}
